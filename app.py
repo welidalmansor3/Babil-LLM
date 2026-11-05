@@ -1,39 +1,135 @@
-# 🌐 BABIL LLM - CHATGPT KLONU (app.py)
-# GitHub -> HuggingFace -> Render mimarisi
-
+# 🌐 BABIL LLM - CHATGPT KLONU (Inference API ile)
 import os
 import streamlit as st
-import torch
-import time
 import requests
 import io
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from huggingface_hub import login
-import fitz  # PyMuPDF for PDF reading
+import fitz  # PyMuPDF
 from duckduckgo_search import DDGS
+from huggingface_hub import InferenceClient
 
-# --- 1. GİRİŞ YETKİLENDİRME ---
-HF_TOKEN = os.environ.get("HF_TOKEN")
+# --- 1. SAYFA AYARLARI ---
+st.set_page_config(page_title="BABIL LLM", page_icon="🧠", layout="wide")
+
+# --- 2. DİL DESTEĞİ (29 DİL) ---
+DILLER = {
+    "Türkçe": "tr", "English": "en", "العربية": "ar", "हिन्दी": "hi",
+    "Ελληνικά": "el", "فارسی": "fa", "Українська": "uk", "Română": "ro",
+    "Indonesia": "id", "Čeština": "cs", "Slovenčina": "sk", "Magyar": "hu",
+    "Slovenščina": "sl", "日本語": "ja", "한국어": "ko", "Deutsch": "de",
+    "Français": "fr", "Русский": "ru", "Español": "es", "Italiano": "it",
+    "Português": "pt", "Tiếng Việt": "vi", "ไทย": "th", "Melayu": "ms",
+    "Filipino": "fil", "বাংলা": "bn", "اردو": "ur", "Nederlands": "nl"
+}
+
+# --- 3. TOKEN KONTROLÜ ---
+HF_TOKEN = os.environ.get("HF_TOKEN", "")
 if not HF_TOKEN:
-    st.error("HuggingFace Token bulunamadı! Render'a HF_TOKEN ekleyin.")
+    st.error("⚠️ HF_TOKEN eksik! Render Environment'a HF_TOKEN ekleyin!")
     st.stop()
 
-login(token=HF_TOKEN)
+client = InferenceClient(token=HF_TOKEN)
 HF_USER = "wellid"
 
-# --- 2. MODELLERİ CACHE'LEME (RAM Dostu) ---
-@st.cache_resource
-def load_model(model_name):
-    tokenizer = AutoTokenizer.from_pretrained(f"{HF_USER}/{model_name}")
-    model = AutoModelForCausalLM.from_pretrained(
-        f"{HF_USER}/{model_name}",
-        torch_dtype=torch.float16,
-        device_map="auto"
-    )
-    model.eval()
-    return model, tokenizer
+# --- 4. MODEL YÖNLENDİRME ---
+MODELLER = {
+    "💬 Sohbet": f"{HF_USER}/babilllm-sohbet",
+    "💻 Codex": f"{HF_USER}/babilllm-codex",
+    "🧮 Matematik": f"{HF_USER}/babilllm-matematik-7b",
+    "🛡️ Güvenlik": f"{HF_USER}/babilllm-guvenlik"
+}
 
-# --- 3. ARAÇLAR (TOOLS) ---
+# --- 5. CSS STİLLERİ ---
+st.markdown("""
+<style>
+.main-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 25px;
+    border-radius: 15px;
+    color: white;
+    text-align: center;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+.main-header h1 {
+    margin: 0;
+    font-size: 2.8em;
+    font-weight: 800;
+}
+.main-header p {
+    margin: 8px 0 0 0;
+    opacity: 0.9;
+    font-size: 1.1em;
+}
+.stButton > button {
+    width: 100%;
+    border-radius: 25px;
+    border: none;
+    padding: 12px 24px;
+    font-weight: bold;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    transition: all 0.3s;
+}
+.stButton > button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+}
+</style>
+""", unsafe_allow_html=True)
+
+# --- 6. HEADER ---
+st.markdown("""
+<div class="main-header">
+    <h1>🧠 BABIL LLM</h1>
+    <p>Türkiye'nin Yapay Zeka Asistanı | 29 Dil | Apache 2.0</p>
+</div>
+""", unsafe_allow_html=True)
+
+# --- 7. SIDEBAR (AYARLAR) ---
+with st.sidebar:
+    st.markdown("### ⚙️ Ayarlar")
+    
+    # Dil Seçimi
+    secili_dil = st.selectbox("🌍 Yanıt Dili", list(DILLER.keys()))
+    
+    # Deep Search Aç/Kapa
+    deep_search_acik = st.checkbox("🔍 Deep Search (Web Arama)", value=False)
+    
+    # PDF Ayarı
+    st.markdown("### 📄 PDF Analizi")
+    st.caption("⚠️ Maksimum 50MB")
+    
+    st.markdown("---")
+    
+    # Mod Seçimi
+    mod = st.radio("📋 Modül Seçin:", list(MODELLER.keys()))
+    
+    st.markdown("---")
+    
+    # Bilgi
+    st.markdown("### ℹ️ Hakkında")
+    st.info(f"""
+    **BABIL LLM Pro**
+    
+    • Model: Qwen 2.5 (7B)
+    • Lisans: Apache 2.0
+    • Dil: {secili_dil}
+    • Deep Search: {'✅ Açık' if deep_search_acik else '❌ Kapalı'}
+    """)
+
+# --- 8. FONKSİYONLAR ---
+
+# Deep Search
+def deep_search(query, lang_code):
+    try:
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=3))
+        if results:
+            context = "\n".join([f"Başlık: {r['title']}\nİçerik: {r['body']}" for r in results])
+            return context
+    except:
+        pass
+    return None
 
 # PDF Okuma
 def read_pdf(pdf_file):
@@ -43,126 +139,109 @@ def read_pdf(pdf_file):
         text += page.get_text()
     return text
 
-# Deep Search (Web Arama)
-def deep_search(query):
-    with DDGS() as ddgs:
-        results = list(ddgs.text(query, max_results=3))
-    return results
-
-# --- 4. ARAYÜZ TASARIMI ---
-st.set_page_config(page_title="BABIL LLM", page_icon="🧠", layout="wide")
-
-st.markdown("""
-<style>
-.main-header {
-    background: linear-gradient(90deg, #1a1a2e 0%, #16213e 100%);
-    padding: 20px;
-    border-radius: 10px;
-    color: white;
-    text-align: center;
-    margin-bottom: 20px;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<div class="main-header">
-    <h1>🧠 BABIL LLM</h1>
-    <p>Türkçe Yapay Zeka | Apache 2.0 | 29 Dil | Deep Search & PDF</p>
-</div>
-""", unsafe_allow_html=True)
-
-# Sol Menü (Mod Seçimi)
-mod = st.sidebar.radio(
-    "Modül Seçin:",
-    ["💬 Sohbet", "💻 Codex (Kod)", "🧮 Matematik", "🛡️ Siber Güvenlik", "📄 PDF Analiz", "🔍 Deep Search"]
-)
-
-# Model Yükleme (Sadece gerektiğinde)
-if mod == "💬 Sohbet" or mod == "📄 PDF Analiz" or mod == "🔍 Deep Search":
-    model, tokenizer = load_model("babilllm-sohbet")
-elif mod == "💻 Codex (Kod)":
-    model, tokenizer = load_model("babilllm-codex")
-elif mod == "🧮 Matematik":
-    model, tokenizer = load_model("babilllm-matematik-7b")
-elif mod == "🛡️ Siber Güvenlik":
-    model, tokenizer = load_model("babilllm-guvenlik")
-
-# --- 5. MODÜLLERİN ÇALIŞMASI ---
-def generate_response(prompt, system_prompt="Sen yardımcı bir Türkçe asistanısın."):
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": prompt}
-    ]
-    text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    inputs = tokenizer(text, return_tensors="pt").to(model.device)
-    
-    with torch.no_grad():
-        outputs = model.generate(
-            **inputs,
+# LLM Cevap Üretme (Inference API)
+def generate_response(prompt, model_name, system_prompt=""):
+    try:
+        full_prompt = f"{system_prompt}\n\nKullanıcı: {prompt}\nAsistan:" if system_prompt else f"Kullanıcı: {prompt}\nAsistan:"
+        
+        response = client.text_generation(
+            model=model_name,
+            prompt=full_prompt,
             max_new_tokens=500,
             temperature=0.3,
-            do_sample=True,
             top_p=0.9,
-            pad_token_id=tokenizer.eos_token_id,
             repetition_penalty=1.1
         )
-    return tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
+        return response.strip()
+    except Exception as e:
+        return f"Hata: {str(e)}"
 
-# --- 6. ARAYÜZ İÇERİĞİ ---
-if mod == "💬 Sohbet":
-    st.header("💬 Sohbet")
-    user_input = st.text_area("Mesajınız:")
-    if st.button("Gönder"):
-        if user_input:
-            with st.spinner("Düşünüyorum..."):
-                st.write(generate_response(user_input))
+# --- 9. ANA EKRAN ---
 
-elif mod == "💻 Codex (Kod)":
-    st.header("💻 Codex")
-    user_input = st.text_area("Kod İsteği:")
-    if st.button("Kod Yaz"):
-        if user_input:
-            with st.spinner("Kod yazılıyor..."):
-                st.code(generate_response(user_input, "Sen uzman bir yazılımcısın. Sadece kod yaz ve Türkçe yorumla."))
+# DeepSeek benzeri özel karşılama mesajı
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": f"Merhaba! Ben **BABIL LLM** 🧠\n\nTürkiye'nin yapay zeka asistanıyım. {secili_dil} dilinde hizmet veriyorum.\n\nSize nasıl yardımcı olabilirim?"
+    })
 
-elif mod == "🧮 Matematik":
-    st.header("🧮 Matematik")
-    user_input = st.text_area("Matematik Sorusu:")
-    if st.button("Çöz"):
-        if user_input:
-            with st.spinner("Hesaplanıyor..."):
-                st.write(generate_response(user_input, "Sen matematik uzmanısın. Adım adım çöz."))
+# Sohbet geçmişini göster
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-elif mod == "🛡️ Siber Güvenlik":
-    st.header("🛡️ Siber Güvenlik")
-    user_input = st.text_area("Güvenlik Sorusu:")
-    if st.button("Analiz Et"):
-        if user_input:
-            with st.spinner("Analiz ediliyor..."):
-                st.write(generate_response(user_input, "Sen siber güvenlik uzmanısın. Sadece savunma odaklı yardım et."))
+# Kullanıcı girdisi
+user_input = st.chat_input("Mesajınızı yazın...")
 
-elif mod == "📄 PDF Analiz":
-    st.header("📄 PDF Analiz")
-    uploaded_file = st.file_uploader("PDF yükle", type="pdf")
-    if uploaded_file:
+if user_input:
+    # Kullanıcı mesajını ekle
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    with st.chat_message("user"):
+        st.markdown(user_input)
+    
+    # Asistan cevabı
+    with st.chat_message("assistant"):
+        with st.spinner("Düşünüyorum..."):
+            # Sistem promptu
+            sistem = f"Sen {secili_dil} dilinde cevap veren yardımcı bir asistansın."
+            
+            if mod == "💻 Codex":
+                sistem += " Sen uzman bir yazılımcısın."
+            elif mod == "🧮 Matematik":
+                sistem += " Sen matematik uzmanısın."
+            elif mod == "🛡️ Güvenlik":
+                sistem += " Sen siber güvenlik uzmanısın."
+            
+            # Deep Search
+            if deep_search_acik:
+                search_results = deep_search(user_input, DILLER[secili_dil])
+                if search_results:
+                    user_input = f"Web Arama Sonuçları:\n{search_results}\n\nSoru: {user_input}"
+            
+            # Cevap üret
+            cevap = generate_response(user_input, MODELLER[mod], sistem)
+            st.markdown(cevap)
+    
+    st.session_state.messages.append({"role": "assistant", "content": cevap})
+
+# --- 10. PDF YÜKLEME ---
+st.markdown("---")
+st.markdown("### 📄 PDF Analizi (Maksimum 50MB)")
+
+uploaded_file = st.file_uploader(
+    "PDF dosyası yükleyin",
+    type=["pdf"],
+    help="Maksimum dosya boyutu: 50MB"
+)
+
+if uploaded_file is not None:
+    # Dosya boyutu kontrolü
+    file_size = len(uploaded_file.read())
+    uploaded_file.seek(0)  # Pointer'ı başa al
+    
+    if file_size > 50 * 1024 * 1024:  # 50MB
+        st.error("❌ Dosya boyutu 50MB'ı aşıyor!")
+    else:
+        st.success(f"✅ PDF yüklendi! ({file_size/(1024*1024):.1f} MB)")
+        
+        # PDF oku
         pdf_text = read_pdf(uploaded_file)
-        st.text_area("PDF İçeriği", pdf_text[:2000], height=200)
-        question = st.text_input("PDF ile ilgili sorunuz:")
-        if st.button("Soru Sor"):
-            if question:
-                prompt = f"PDF İÇERİĞİ:\n{pdf_text[:3000]}\n\nSORU: {question}"
-                with st.spinner("PDF okunuyor..."):
-                    st.write(generate_response(prompt))
-
-elif mod == "🔍 Deep Search":
-    st.header("🔍 Deep Search (Web Araması)")
-    query = st.text_input("Web'de ara:")
-    if st.button("Ara ve Cevapla"):
-        if query:
-            with st.spinner("Web'de aranılyor..."):
-                results = deep_search(query)
-                if results:
-                    context = "\n".join([f"Başlık: {r['title']}\nİçerik: {r['body']}" for r in results])
-                    prompt = f"WEB ARAMA SONUÇLARI:\n{context}\n\nSORU: {query}\n\nBu bilgilere dayanarak cevap ver."
-                    st.write(generate_response(prompt))
+        
+        # PDF içeriğini göster
+        with st.expander("PDF İçeriği (İlk 1000 karakter)"):
+            st.text(pdf_text[:1000])
+        
+        # PDF ile ilgili soru
+        pdf_question = st.text_input("PDF ile ilgili sorunuz:")
+        
+        if st.button("PDF'yi Analiz Et"):
+            if pdf_question:
+                with st.spinner("PDF analiz ediliyor..."):
+                    prompt = f"PDF İÇERİĞİ:\n{pdf_text[:3000]}\n\nSORU: {pdf_question}"
+                    cevap = generate_response(prompt, MODELLER[mod], sistem)
+                    
+                    st.markdown("### 📋 Analiz Sonucu:")
+                    st.write(cevap)
+            else:
+                st.warning("Lütfen bir soru girin.")
