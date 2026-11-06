@@ -81,7 +81,7 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
 
-# Yeni HuggingFace API İstemcisi
+# HuggingFace Client
 client = InferenceClient(model=MODEL_ID, token=HF_TOKEN)
 
 def generate_response(prompt, system_prompt):
@@ -99,9 +99,20 @@ def generate_response(prompt, system_prompt):
             repetition_penalty=1.1,
             return_full_text=False
         )
+        
+        # Model boş cevap döndürürse (Uyku modundan yeni kalktı)
+        if not response or len(response.strip()) == 0:
+            return "⏳ Model uyandı, şimdi tam hazır! Lütfen mesajı TEKRAR GÖNDER."
+            
         return response.strip()
+        
     except Exception as e:
-        return f"❌ Hata: {str(e)}"
+        err_str = str(e).lower()
+        # Model yükleniyorsa
+        if "loading" in err_str or "503" in err_str:
+            return "⏳ Model HuggingFace sunucularında yükleniyor (İlk uyandırma 30 sn sürer). Lütfen 30 saniye bekleyip mesajı TEKRAR GÖNDER."
+        else:
+            return f"❌ Hata: {str(e)}"
 
 def deep_search(query):
     try:
