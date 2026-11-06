@@ -88,22 +88,28 @@ def generate_response(prompt, system_prompt):
         if not HF_TOKEN:
             return "⚠️ HF_TOKEN eksik! Render'da Environment Variables'a HF_TOKEN ekleyin."
         
-        full_prompt = f"System: {system_prompt}\n\nUser: {prompt}\n\nAssistant:"
+        # Yeni Sohbet Formatı (Conversational)
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt}
+        ]
         
-        response = client.text_generation(
-            prompt=full_prompt,
-            max_new_tokens=800,
+        response = client.chat_completion(
+            messages=messages,
+            max_tokens=800,
             temperature=0.3,
             top_p=0.9,
-            repetition_penalty=1.1,
-            return_full_text=False
+            repetition_penalty=1.1
         )
         
+        # Cevabı çıkar
+        cevap = response.choices[0].message.content
+        
         # Model boş cevap döndürürse (Uyku modundan yeni kalktı)
-        if not response or len(response.strip()) == 0:
+        if not cevap or len(cevap.strip()) == 0:
             return "⏳ Model uyandı, şimdi tam hazır! Lütfen mesajı TEKRAR GÖNDER."
             
-        return response.strip()
+        return cevap.strip()
         
     except Exception as e:
         err_str = str(e).lower()
