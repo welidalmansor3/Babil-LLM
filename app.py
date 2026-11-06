@@ -1,8 +1,8 @@
 import os
 import streamlit as st
-import requests
 import fitz
 from duckduckgo_search import DDGS
+from huggingface_hub import InferenceClient
 
 st.set_page_config(page_title="BABIL LLM", page_icon="🧠", layout="wide")
 
@@ -23,6 +23,7 @@ HF_TOKEN = os.environ.get("HF_TOKEN", "")
 HF_USER = "wellid"
 MODEL_ID = f"{HF_USER}/babilllm-all-in-one"
 
+# Z.AI / ChatGPT Tarzı CSS (Karanlık Tema)
 st.markdown("""
 <style>
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
@@ -80,26 +81,25 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
 
+# Yeni HuggingFace API İstemcisi
+client = InferenceClient(model=MODEL_ID, token=HF_TOKEN)
+
 def generate_response(prompt, system_prompt):
     try:
         if not HF_TOKEN:
-            return "⚠️ HF_TOKEN eksik!"
-        headers = {"Authorization": f"Bearer {HF_TOKEN}", "Content-Type": "application/json"}
+            return "⚠️ HF_TOKEN eksik! Render'da Environment Variables'a HF_TOKEN ekleyin."
+        
         full_prompt = f"System: {system_prompt}\n\nUser: {prompt}\n\nAssistant:"
-        data = {"inputs": full_prompt, "parameters": {"max_new_tokens": 800, "temperature": 0.3, "top_p": 0.9, "repetition_penalty": 1.1, "return_full_text": False}}
         
-        url = f"https://api-inference.huggingface.co/models/{MODEL_ID}"
-        response = requests.post(url, headers=headers, json=data, timeout=120)
-        
-        if response.status_code == 200:
-            result = response.json()
-            if isinstance(result, list) and len(result) > 0: return result[0].get("generated_text", "").strip()
-            elif isinstance(result, dict) and "generated_text" in result: return result["generated_text"].strip()
-            else: return str(result)
-        elif response.status_code == 503:
-            return "⏳ Model yükleniyor, 20 saniye sonra tekrar deneyin."
-        else:
-            return f"❌ Hata ({response.status_code})"
+        response = client.text_generation(
+            prompt=full_prompt,
+            max_new_tokens=800,
+            temperature=0.3,
+            top_p=0.9,
+            repetition_penalty=1.1,
+            return_full_text=False
+        )
+        return response.strip()
     except Exception as e:
         return f"❌ Hata: {str(e)}"
 
