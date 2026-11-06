@@ -1,17 +1,3 @@
-# 🌐 BABIL LLM - CHATGPT TARZI CANLI ARAYÜZ
-import os
-import time
-import subprocess
-import re
-
-# 1. TOKEN AYARI
-from google.colab import userdata
-hf_token = userdata.get('hf_token')
-os.environ["HF_TOKEN"] = hf_token
-
-# 2. APP.PY DOSYASINI OLUŞTUR
-print("📝 app.py oluşturuluyor...")
-app_code = '''
 import os
 import streamlit as st
 import requests
@@ -37,7 +23,6 @@ HF_TOKEN = os.environ.get("HF_TOKEN", "")
 HF_USER = "wellid"
 MODEL_ID = f"{HF_USER}/babilllm-all-in-one"
 
-# Z.AI / ChatGPT Tarzı CSS (Karanlık Tema)
 st.markdown("""
 <style>
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
@@ -89,7 +74,7 @@ with st.sidebar:
     uploaded_file = st.file_uploader("PDF yükle", type=["pdf"])
     st.markdown("---")
     st.markdown("### ℹ️ Durum")
-    st.caption(f"Dil: {secili_dil}\\nArama: {'✅' if deep_search_acik else '❌'}\\nModel: Qwen 7B\\nLisans: Apache 2.0")
+    st.caption(f"Dil: {secili_dil}\nArama: {'✅' if deep_search_acik else '❌'}\nModel: Qwen 7B\nLisans: Apache 2.0")
     st.markdown("---")
     if st.button("🗑️ Sohbeti Temizle"):
         st.session_state.messages = []
@@ -100,7 +85,7 @@ def generate_response(prompt, system_prompt):
         if not HF_TOKEN:
             return "⚠️ HF_TOKEN eksik!"
         headers = {"Authorization": f"Bearer {HF_TOKEN}", "Content-Type": "application/json"}
-        full_prompt = f"System: {system_prompt}\\n\\nUser: {prompt}\\n\\nAssistant:"
+        full_prompt = f"System: {system_prompt}\n\nUser: {prompt}\n\nAssistant:"
         data = {"inputs": full_prompt, "parameters": {"max_new_tokens": 800, "temperature": 0.3, "top_p": 0.9, "repetition_penalty": 1.1, "return_full_text": False}}
         
         url = f"https://api-inference.huggingface.co/models/{MODEL_ID}"
@@ -122,7 +107,7 @@ def deep_search(query):
     try:
         with DDGS() as ddgs:
             results = list(ddgs.text(query, max_results=3))
-        if results: return "\\n\\n".join([f"Başlık: {r['title']}\\nİçerik: {r['body']}" for r in results])
+        if results: return "\n\n".join([f"Başlık: {r['title']}\nİçerik: {r['body']}" for r in results])
     except: pass
     return None
 
@@ -148,7 +133,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 if len(st.session_state.messages) == 0:
-    st.session_state.messages.append({"role": "assistant", "content": "Merhaba! Ben **BABIL LLM** 🧠\\n\\nKod yazabilirim, matematik çözebilirim, felsefe yapabilirim ve siber güvenlikte danışmanlık verebilirim.\\n\\nSize nasıl yardımcı olabilirim?"})
+    st.session_state.messages.append({"role": "assistant", "content": "Merhaba! Ben **BABIL LLM** 🧠\n\nKod yazabilirim, matematik çözebilirim, felsefe yapabilirim ve siber güvenlikte danışmanlık verebilirim.\n\nSize nasıl yardımcı olabilirim?"})
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -170,7 +155,7 @@ user_input = st.chat_input(f"Mesajınızı {secili_dil} dilinde yazın...")
 if user_input:
     final_prompt = user_input
     if pdf_context:
-        final_prompt = f"Kullanıcının yüklediği PDF içeriği:\\n{pdf_context[:3000]}\\n\\nKullanıcının sorusu: {user_input}"
+        final_prompt = f"Kullanıcının yüklediği PDF içeriği:\n{pdf_context[:3000]}\n\nKullanıcının sorusu: {user_input}"
     
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
@@ -182,7 +167,7 @@ if user_input:
                 with st.spinner("🔍 Web'de aranıyor..."):
                     sonuc = deep_search(user_input)
                     if sonuc:
-                        final_prompt = f"Web Arama Sonuçları:\\n{sonuc}\\n\\nSoru: {user_input}"
+                        final_prompt = f"Web Arama Sonuçları:\n{sonuc}\n\nSoru: {user_input}"
                         st.info("✅ Web araması tamamlandı")
             
             cevap = generate_response(final_prompt, SISTEM_PROMPTU)
@@ -192,62 +177,3 @@ if user_input:
 
 st.markdown("---")
 st.markdown('<div style="text-align: center; padding: 16px; color: #52525b;"><p style="font-size: 0.8em;">🧠 BABIL LLM · All-in-One · Apache 2.0 · 29 Dil</p></div>', unsafe_allow_html=True)
-'''
-
-with open("/content/app.py", "w") as f:
-    f.write(app_code)
-
-print("✅ app.py oluşturuldu!")
-
-# 3. KÜTÜPHANELERİ KUR
-print("📦 Kütüphaneler kuruluyor...")
-os.system("pip install -q streamlit requests PyMuPDF duckduckgo_search")
-
-# 4. STREAMLIT'İ BAŞLAT
-print("🚀 Streamlit başlatılıyor (CORS/XSRF kapalı)...")
-os.system("fuser -k 8501/tcp 2>/dev/null")
-streamlit_cmd = (
-    "streamlit run /content/app.py "
-    "--server.port 8501 "
-    "--server.address 0.0.0.0 "
-    "--server.enableCORS false "
-    "--server.enableXsrfProtection false "
-    "--server.headless true "
-    "--browser.gatherUsageStats false > /dev/null 2>&1 &"
-)
-os.system(streamlit_cmd)
-time.sleep(5)
-
-# 5. CLOUDFLARE TUNNEL'I BAŞLAT
-print("🌐 Cloudflare Tunnel başlatılıyor...")
-os.system("cloudflared tunnel --url http://localhost:8501 > /content/cf.log 2>&1 &")
-
-print("⏳ Link bekleniyor (15 saniye)...")
-time.sleep(15)
-
-# 6. LİNKİ BUL VE GÖSTER
-with open("/content/cf.log", "r") as f:
-    cf_output = f.read()
-
-urls = re.findall(r'https://[a-z0-9-]+\.trycloudflare\.com', cf_output)
-
-if urls:
-    print("\n" + "="*55)
-    print("🎉 BABIL LLM CANLI!")
-    print("="*55)
-    print(f"\n🔗 {urls[0]}\n")
-    print("✅ Şifre YOK!")
-    print("✅ JS Hatası YOK!")
-    print("✅ ChatGPT gibi akıcı!")
-    print("\n💡 Bu linki tarayıcıda aç ve test et!")
-    
-    # Keep-Alive döngüsü
-    print("\n🛡️ Sistem canlı tutuluyor...")
-    print("❌ Bu hücreyi kapatma, bağlantı kopar!")
-    while True:
-        time.sleep(60)
-        print("✅ Sistem çalışıyor... " + time.strftime("%H:%M:%S"))
-else:
-    print("❌ Link bulunamadı!")
-    print("📋 Cloudflare Logları:")
-    print(cf_output[-1000:])
