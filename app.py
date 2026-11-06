@@ -1,474 +1,253 @@
-# 🌐 BABIL LLM - CHATGPT KLONU (API ile)
+# 🌐 BABIL LLM - CHATGPT TARZI CANLI ARAYÜZ
+import os
+import time
+import subprocess
+import re
+
+# 1. TOKEN AYARI
+from google.colab import userdata
+hf_token = userdata.get('hf_token')
+os.environ["HF_TOKEN"] = hf_token
+
+# 2. APP.PY DOSYASINI OLUŞTUR
+print("📝 app.py oluşturuluyor...")
+app_code = '''
 import os
 import streamlit as st
 import requests
-import fitz  # PyMuPDF
+import fitz
 from duckduckgo_search import DDGS
 
-# --- 1. SAYFA AYARLARI ---
-st.set_page_config(
-    page_title="BABIL LLM",
-    page_icon="🧠",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="BABIL LLM", page_icon="🧠", layout="wide")
 
-# --- 2. DİL DESTEĞİ (29 DİL) ---
 DILLER = {
-    "🇹🇷 Türkçe": "tr",
-    "🇬🇧 English": "en",
-    "🇸🇦 العربية": "ar",
-    "🇮🇳 हिन्दी": "hi",
-    "🇬🇷 Ελληνικά": "el",
-    "🇮🇷 فارسی": "fa",
-    "🇺🇦 Українська": "uk",
-    "🇷🇴 Română": "ro",
-    "🇮🇩 Indonesia": "id",
-    "🇨🇿 Čeština": "cs",
-    "🇸🇰 Slovenčina": "sk",
-    "🇭🇺 Magyar": "hu",
-    "🇸🇮 Slovenščina": "sl",
-    "🇯🇵 日本語": "ja",
-    "🇰🇷 한국어": "ko",
-    "🇩🇪 Deutsch": "de",
-    "🇫🇷 Français": "fr",
-    "🇷🇺 Русский": "ru",
-    "🇪🇸 Español": "es",
-    "🇮🇹 Italiano": "it",
-    "🇵🇹 Português": "pt",
-    "🇻🇳 Tiếng Việt": "vi",
-    "🇹🇭 ไทย": "th",
-    "🇲🇾 Melayu": "ms",
-    "🇵🇭 Filipino": "fil",
-    "🇧🇩 বাংলা": "bn",
-    "🇵🇰 اردو": "ur",
-    "🇳🇱 Nederlands": "nl",
-    "🇨🇳 中文": "zh"
+    "🇹🇷 Türkçe": "tr", "🇬🇧 English": "en", "🇸🇦 العربية": "ar",
+    "🇮🇳 हिन्दी": "hi", "🇬🇷 Ελληνικά": "el", "🇮🇷 فارسی": "fa",
+    "🇺🇦 Українська": "uk", "🇷🇴 Română": "ro", "🇮🇩 Indonesia": "id",
+    "🇨🇿 Čeština": "cs", "🇸🇰 Slovenčina": "sk", "🇭🇺 Magyar": "hu",
+    "🇸🇮 Slovenščina": "sl", "🇯🇵 日本語": "ja", "🇰🇷 한국어": "ko",
+    "🇩🇪 Deutsch": "de", "🇫🇷 Français": "fr", "🇷🇺 Русский": "ru",
+    "🇪🇸 Español": "es", "🇮🇹 Italiano": "it", "🇵🇹 Português": "pt",
+    "🇻🇳 Tiếng Việt": "vi", "🇹🇭 ไทย": "th", "🇲🇾 Melayu": "ms",
+    "🇵🇭 Filipino": "fil", "🇧🇩 বাংলা": "bn", "🇵🇰 اردو": "ur",
+    "🇳🇱 Nederlands": "nl", "🇨🇳 中文": "zh"
 }
 
-# --- 3. TOKEN KONTROLÜ ---
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
 HF_USER = "wellid"
+MODEL_ID = f"{HF_USER}/babilllm-all-in-one"
 
-MODELLER = {
-    "💬 Sohbet": f"{HF_USER}/babilllm-sohbet",
-    "💻 Codex": f"{HF_USER}/babilllm-codex",
-    "🧮 Matematik": f"{HF_USER}/babilllm-matematik-7b",
-    "🛡️ Güvenlik": f"{HF_USER}/babilllm-guvenlik"
-}
-
-# --- 4. CSS (DeepSeek Tarzı Kara Tema) ---
+# Z.AI / ChatGPT Tarzı CSS (Karanlık Tema)
 st.markdown("""
 <style>
-/* Ana arka plan */
-.stApp {
-    background: #0f0f1a;
-    color: #e0e0e0;
-}
-
-/* Başlık */
-.main-header {
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-    padding: 30px;
-    border-radius: 15px;
-    text-align: center;
-    margin-bottom: 20px;
-    border: 1px solid #1a1a3e;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-}
-.main-header h1 {
-    margin: 0;
-    font-size: 2.5em;
-    background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    font-weight: 800;
-}
-.main-header p {
-    margin: 10px 0 0 0;
-    color: #888;
-    font-size: 1em;
-}
-
-/* Sidebar */
-section[data-testid="stSidebar"] {
-    background: #0a0a14;
-    border-right: 1px solid #1a1a2e;
-}
-
-/* Chat input */
-.stChatInput textarea {
-    background: #1a1a2e !important;
-    border: 1px solid #2a2a4e !important;
-    color: #e0e0e0 !important;
-    border-radius: 15px !important;
-}
-
-/* Chat messages */
-.stChatMessage {
-    border-radius: 15px;
-    margin: 10px 0;
-}
-
-/* User mesajı */
-[data-testid="stChatMessage"]:has([data-testid="chat-avatar-user"]) {
-    background: #1a1a3e;
-    border: 1px solid #2a2a5e;
-}
-
-/* Asistan mesajı */
-[data-testid="stChatMessage"]:has([data-testid="chat-avatar-assistant"]) {
-    background: #0f1a2e;
-    border: 1px solid #1a2a4e;
-}
-
-/* Butonlar */
-.stButton > button {
-    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
-    color: white !important;
-    border: none !important;
-    border-radius: 20px !important;
-    padding: 10px 24px !important;
-    font-weight: bold !important;
-    transition: all 0.3s !important;
-}
-.stButton > button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4) !important;
-}
-
-/* File uploader */
-.stFileUploader {
-    border: 2px dashed #2a2a4e !important;
-    border-radius: 15px !important;
-    background: #0a0a14 !important;
-}
-
-/* Selectbox */
-.stSelectbox > div > div {
-    background: #1a1a2e !important;
-    color: #e0e0e0 !important;
-    border: 1px solid #2a2a4e !important;
-    border-radius: 10px !important;
-}
-
-/* Checkbox */
-.stCheckbox label {
-    color: #e0e0e0 !important;
-}
-
-/* Text input */
-.stTextInput > div > div {
-    background: #1a1a2e !important;
-    color: #e0e0e0 !important;
-    border: 1px solid #2a2a4e !important;
-    border-radius: 10px !important;
-}
-
-/* Expander */
-.stExpander {
-    background: #0a0a14 !important;
-    border: 1px solid #1a1a2e !important;
-    border-radius: 10px !important;
-}
-
-/* Spinner */
-.stSpinner > div {
-    border-color: #667eea !important;
-}
-
-/* Divider */
-hr {
-    border-color: #1a1a2e !important;
-}
-
-/* Warning/Info */
-.stAlert {
-    border-radius: 10px !important;
-}
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+* { font-family: 'Inter', sans-serif !important; }
+.stApp { background: #0d0d0f; color: #e4e4e7; }
+section[data-testid="stSidebar"] { background: #0a0a0c !important; border-right: 1px solid #1a1a1e !important; }
+.main-header { background: linear-gradient(135deg, #18181b 0%, #09090b 100%); border: 1px solid #27272a; border-radius: 16px; padding: 24px 28px; margin-bottom: 20px; display: flex; align-items: center; gap: 16px; }
+.main-header .logo { font-size: 3em; }
+.main-header h1 { margin: 0; font-size: 1.8em; font-weight: 800; color: #f4f4f5; letter-spacing: -0.5px; }
+.main-header p { margin: 4px 0 0 0; color: #71717a; font-size: 0.85em; }
+.stChatMessage { border-radius: 12px; padding: 16px 20px; margin: 8px 0; border: 1px solid #27272a !important; background: #18181b !important; }
+[data-testid="stChatMessage"]:has([data-testid="chat-avatar-user"]) { background: #1c1c21 !important; border-color: #2e2e35 !important; }
+[data-testid="stChatMessage"]:has([data-testid="chat-avatar-assistant"]) { background: #131316 !important; border-color: #1f1f25 !important; }
+.stChatInput textarea { background: #18181b !important; border: 1px solid #27272a !important; border-radius: 12px !important; color: #e4e4e7 !important; padding: 14px 18px !important; }
+.stButton > button { background: #18181b !important; color: #e4e4e7 !important; border: 1px solid #27272a !important; border-radius: 10px !important; padding: 10px 20px !important; font-weight: 600 !important; }
+.stButton > button:hover { background: #27272a !important; border-color: #3f3f46 !important; }
+.stSelectbox > div > div { background: #18181b !important; color: #e4e4e7 !important; border: 1px solid #27272a !important; border-radius: 8px !important; }
+.stCheckbox label { color: #a1a1aa !important; }
+.stFileUploader { border: 2px dashed #27272a !important; border-radius: 12px !important; background: #0d0d0f !important; padding: 20px !important; }
+.stExpander { background: #131316 !important; border: 1px solid #1f1f25 !important; border-radius: 10px !important; }
+.stAlert { border-radius: 10px !important; background: #18181b !important; border: 1px solid #27272a !important; }
+hr { border-color: #1a1a1e !important; }
+section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 { color: #e4e4e7 !important; font-weight: 700 !important; }
+.stCaption { color: #71717a !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 5. HEADER ---
 st.markdown("""
 <div class="main-header">
-    <h1>🧠 BABIL LLM</h1>
-    <p>29 Dil Desteği | Deep Search | PDF Analizi | Apache 2.0</p>
+    <div class="logo">🧠</div>
+    <div>
+        <h1>BABIL LLM</h1>
+        <p>Yapay Zeka Asistanı · 29 Dil · Deep Search · PDF Analizi</p>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
-# --- 6. SIDEBAR (AYARLAR - SAĞ TARAFTA GÖRÜNÜR) ---
 with st.sidebar:
-    st.markdown("## ⚙️ AYARLAR")
+    st.markdown("## ⚙️ Ayarlar")
     st.markdown("---")
-    
-    # Dil Seçimi (29 Dil)
-    st.markdown("### 🌍 Yanıt Dili")
-    secili_dil_adi = st.selectbox(
-        "Dil seçin",
-        list(DILLER.keys()),
-        index=0
-    )
-    secili_dil_kodu = DILLER[secili_dil_adi]
-    
+    st.markdown("### 🌍 Dil")
+    secili_dil = st.selectbox("Yanıt dili", list(DILLER.keys()))
     st.markdown("---")
-    
-    # Mod Seçimi
-    st.markdown("### 📋 Modül")
-    mod = st.selectbox(
-        "Modül seçin",
-        list(MODELLER.keys())
-    )
-    
-    st.markdown("---")
-    
-    # Deep Search Aç/Kapa
     st.markdown("### 🔍 Deep Search")
-    deep_search_acik = st.checkbox(
-        "Web araması yap",
-        value=False,
-        help="Açık olduğunda, model web'de arama yaparak güncel bilgiler kullanır"
-    )
-    
+    deep_search_acik = st.checkbox("Web araması", value=False)
     st.markdown("---")
-    
-    # PDF Bilgilendirme
     st.markdown("### 📄 PDF Analizi")
-    st.info("📄 Maksimum: 50MB\n\n⬇️ PDF'i aşağıdan yükleyin")
-    
+    st.caption("Maksimum: 50MB · PDF formatı")
+    uploaded_file = st.file_uploader("PDF yükle", type=["pdf"])
     st.markdown("---")
-    
-    # Sistem Bilgisi
-    st.markdown("### ℹ️ Sistem")
-    st.caption(f"""
-    • Model: Qwen 2.5 (7B)
-    • Lisans: Apache 2.0
-    • Dil: {secili_dil_adi}
-    • Deep Search: {'✅ Açık' if deep_search_acik else '❌ Kapalı'}
-    • Modül: {mod}
-    """)
+    st.markdown("### ℹ️ Durum")
+    st.caption(f"Dil: {secili_dil}\\nArama: {'✅' if deep_search_acik else '❌'}\\nModel: Qwen 7B\\nLisans: Apache 2.0")
+    st.markdown("---")
+    if st.button("🗑️ Sohbeti Temizle"):
+        st.session_state.messages = []
+        st.rerun()
 
-# --- 7. FONKSİYONLAR ---
-
-# HuggingFace API ile ceap üret
-def generate_response(prompt, model_id, system_prompt=""):
+def generate_response(prompt, system_prompt):
     try:
         if not HF_TOKEN:
-            return "⚠️ HF_TOKEN eksik! Render Environment'a HF_TOKEN ekleyin."
+            return "⚠️ HF_TOKEN eksik!"
+        headers = {"Authorization": f"Bearer {HF_TOKEN}", "Content-Type": "application/json"}
+        full_prompt = f"System: {system_prompt}\\n\\nUser: {prompt}\\n\\nAssistant:"
+        data = {"inputs": full_prompt, "parameters": {"max_new_tokens": 800, "temperature": 0.3, "top_p": 0.9, "repetition_penalty": 1.1, "return_full_text": False}}
         
-        headers = {
-            "Authorization": f"Bearer {HF_TOKEN}",
-            "Content-Type": "application/json"
-        }
-        
-        # Full prompt
-        if system_prompt:
-            full_prompt = f"System: {system_prompt}\n\nUser: {prompt}\n\nAssistant:"
-        else:
-            full_prompt = f"User: {prompt}\n\nAssistant:"
-        
-        data = {
-            "inputs": full_prompt,
-            "parameters": {
-                "max_new_tokens": 500,
-                "temperature": 0.3,
-                "top_p": 0.9,
-                "repetition_penalty": 1.1,
-                "return_full_text": False
-            }
-        }
-        
-        url = f"https://api-inference.huggingface.co/models/{model_id}"
-        response = requests.post(url, headers=headers, json=data, timeout=60)
+        url = f"https://api-inference.huggingface.co/models/{MODEL_ID}"
+        response = requests.post(url, headers=headers, json=data, timeout=120)
         
         if response.status_code == 200:
             result = response.json()
-            if isinstance(result, list) and len(result) > 0:
-                return result[0].get("generated_text", "").strip()
-            elif isinstance(result, dict) and "generated_text" in result:
-                return result["generated_text"].strip()
-            else:
-                return str(result)
+            if isinstance(result, list) and len(result) > 0: return result[0].get("generated_text", "").strip()
+            elif isinstance(result, dict) and "generated_text" in result: return result["generated_text"].strip()
+            else: return str(result)
         elif response.status_code == 503:
-            return "⏳ Model şu anda yükleniyor. Lütfen 20 saniye sonra tekrar deneyin."
+            return "⏳ Model yükleniyor, 20 saniye sonra tekrar deneyin."
         else:
-            return f"❌ Hata ({response.status_code}): {response.text[:200]}"
-            
+            return f"❌ Hata ({response.status_code})"
     except Exception as e:
         return f"❌ Hata: {str(e)}"
 
-# Deep Search
 def deep_search(query):
     try:
         with DDGS() as ddgs:
             results = list(ddgs.text(query, max_results=3))
-        if results:
-            context = "\n\n".join([
-                f"Başlık: {r['title']}\nİçerik: {r['body']}"
-                for r in results
-            ])
-            return context
-    except:
-        pass
+        if results: return "\\n\\n".join([f"Başlık: {r['title']}\\nİçerik: {r['body']}" for r in results])
+    except: pass
     return None
 
-# PDF Okuma
 def read_pdf(pdf_file):
     doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
     text = ""
-    for page in doc:
-        text += page.get_text()
+    for page in doc: text += page.get_text()
     return text
 
-# --- 8. SOHBET EKRANI (DeepSeek Tarzı) ---
+SISTEM_PROMPTU = f"""Sen BABIL LLM'sin. Her şeyi bilebilen tek bir süper asistansın.
+Kullanıcı hangi dilde yazarsa ({secili_dil}) o dilde cevap ver.
 
-# Sohbet geçmişi
+Görevlerin:
+1. SOHBET VE FELSEFE: Genel sorulara mantıklı, derin ve empatik cevaplar ver.
+2. KOD YAZMA: Python, HTML, C++ vb. istendiğinde temiz, çalışan ve profesyonel kodlar yaz.
+3. MATEMATİK: Matematik problemlerini adım adım çöz, doğru sonucu ver.
+4. SİBER GÜVENLİK: Kod denetimi, açık tespiti yap. SADECE SAVUNMA amaçlı yardım et, asla saldırı/exploit kodu yazma.
+
+Kullanıcının sorusuna bakıp hangi şapkayı giyeceğine (uzmanlığın hangisiyse) sen karar ver ve kusursuz bir cevap ver.
+"""
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Karşılama mesajı (ilk açılışta)
 if len(st.session_state.messages) == 0:
-    hosgeldin_mesaji = f"""Merhaba! Ben **BABIL LLM** 🧠
+    st.session_state.messages.append({"role": "assistant", "content": "Merhaba! Ben **BABIL LLM** 🧠\\n\\nKod yazabilirim, matematik çözebilirim, felsefe yapabilirim ve siber güvenlikte danışmanlık verebilirim.\\n\\nSize nasıl yardımcı olabilirim?"})
 
-Türkiye'nin yapay zeka asistanıyım. Size nasıl yardımcı olabilirim?
-
-**Özellikler:**
-- 💬 Sohbet ve felsefe
-- 💻 Kod yazma (Codex)
-- 🧮 Matematik çözme
-- 🛡️ Siber güvenlik
-- 📄 PDF analizi
-- 🔍 Deep Search (Web arama)
-
-**Aktif Dil:** {secili_dil_adi}
-**Aktif Modül:** {mod}
-
-Bir şey yazın, size yardımcı olayım! 😊"""
-    
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": hosgeldin_mesaji
-    })
-
-# Eski mesajları göster
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Kullanıcı girdisi (chat input)
-user_input = st.chat_input(f"Mesajınızı {secili_dil_adi} dilinde yazın...")
+pdf_context = ""
+if uploaded_file is not None:
+    file_size = len(uploaded_file.read())
+    uploaded_file.seek(0)
+    if file_size > 50 * 1024 * 1024:
+        st.error(f"❌ 50MB'ı aştı! ({file_size/(1024*1024):.1f} MB)")
+    else:
+        with st.spinner("📖 PDF okunuyor..."):
+            pdf_context = read_pdf(uploaded_file)
+        st.success(f"✅ PDF yüklendi! ({file_size/(1024*1024):.1f} MB)")
+
+user_input = st.chat_input(f"Mesajınızı {secili_dil} dilinde yazın...")
 
 if user_input:
-    # Kullanıcı mesajını kaydet ve göster
+    final_prompt = user_input
+    if pdf_context:
+        final_prompt = f"Kullanıcının yüklediği PDF içeriği:\\n{pdf_context[:3000]}\\n\\nKullanıcının sorusu: {user_input}"
+    
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
     
-    # Asistan cevabı
     with st.chat_message("assistant"):
         with st.spinner("🧠 Düşünüyorum..."):
-            # Sistem promptu
-            sistem = f"Sen {secili_dil_adi.split(' ', 1)[-1]} dilinde cevap veren yardımcı bir asistansın."
-            
-            if mod == "💻 Codex":
-                sistem += " Sen uzman bir yazılımcısın. Sadece kod yaz ve Türkçe açıklama ekle."
-            elif mod == "🧮 Matematik":
-                sistem += " Sen matematik uzmanısın. Adım adım çöz."
-            elif mod == "🛡️ Güvenlik":
-                sistem += " Sen siber güvenlik uzmanısın. Sadece savunma amaçlı yardım et."
-            
-            # Deep Search
-            arama_sonucu = ""
             if deep_search_acik:
                 with st.spinner("🔍 Web'de aranıyor..."):
                     sonuc = deep_search(user_input)
                     if sonuc:
-                        arama_sonucu = f"\n\nWeb Arama Sonuçları:\n{sonuc}\n\nSoru: {user_input}"
-                        st.info("✅ Web araması tamamlandı, cevap hazırlanıyor...")
-                    else:
-                        st.warning("Web araması başarısız, model kendi bilgisini kullanacak.")
+                        final_prompt = f"Web Arama Sonuçları:\\n{sonuc}\\n\\nSoru: {user_input}"
+                        st.info("✅ Web araması tamamlandı")
             
-            # Cevap üret
-            final_prompt = arama_sonucu + user_input if arama_sonucu else user_input
-            cevap = generate_response(final_prompt, MODELLER[mod], sistem)
-            
+            cevap = generate_response(final_prompt, SISTEM_PROMPTU)
             st.markdown(cevap)
     
-    # Cevabı kaydet
     st.session_state.messages.append({"role": "assistant", "content": cevap})
 
-# --- 9. PDF YÜKLEME BÖLÜMÜ ---
 st.markdown("---")
-st.markdown("## 📄 PDF Analizi")
-st.markdown("**⚠️ Maksimum dosya boyutu: 50MB**")
+st.markdown('<div style="text-align: center; padding: 16px; color: #52525b;"><p style="font-size: 0.8em;">🧠 BABIL LLM · All-in-One · Apache 2.0 · 29 Dil</p></div>', unsafe_allow_html=True)
+'''
 
-col1, col2 = st.columns([2, 1])
+with open("/content/app.py", "w") as f:
+    f.write(app_code)
 
-with col1:
-    uploaded_file = st.file_uploader(
-        "PDF dosyası yükleyin",
-        type=["pdf"],
-        help="Maksimum 50MB"
-    )
+print("✅ app.py oluşturuldu!")
 
-with col2:
-    st.info("""
-    📋 **PDF Bilgileri**
+# 3. KÜTÜPHANELERİ KUR
+print("📦 Kütüphaneler kuruluyor...")
+os.system("pip install -q streamlit requests PyMuPDF duckduckgo_search")
+
+# 4. STREAMLIT'İ BAŞLAT
+print("🚀 Streamlit başlatılıyor (CORS/XSRF kapalı)...")
+os.system("fuser -k 8501/tcp 2>/dev/null")
+streamlit_cmd = (
+    "streamlit run /content/app.py "
+    "--server.port 8501 "
+    "--server.address 0.0.0.0 "
+    "--server.enableCORS false "
+    "--server.enableXsrfProtection false "
+    "--server.headless true "
+    "--browser.gatherUsageStats false > /dev/null 2>&1 &"
+)
+os.system(streamlit_cmd)
+time.sleep(5)
+
+# 5. CLOUDFLARE TUNNEL'I BAŞLAT
+print("🌐 Cloudflare Tunnel başlatılıyor...")
+os.system("cloudflared tunnel --url http://localhost:8501 > /content/cf.log 2>&1 &")
+
+print("⏳ Link bekleniyor (15 saniye)...")
+time.sleep(15)
+
+# 6. LİNKİ BUL VE GÖSTER
+with open("/content/cf.log", "r") as f:
+    cf_output = f.read()
+
+urls = re.findall(r'https://[a-z0-9-]+\.trycloudflare\.com', cf_output)
+
+if urls:
+    print("\n" + "="*55)
+    print("🎉 BABIL LLM CANLI!")
+    print("="*55)
+    print(f"\n🔗 {urls[0]}\n")
+    print("✅ Şifre YOK!")
+    print("✅ JS Hatası YOK!")
+    print("✅ ChatGPT gibi akıcı!")
+    print("\n💡 Bu linki tarayıcıda aç ve test et!")
     
-    • Maksimum: 50MB
-    • Format: PDF
-    • İşleme: Otomatik
-    """)
-
-if uploaded_file is not None:
-    # Dosya boyutu kontrolü
-    file_size = len(uploaded_file.read())
-    uploaded_file.seek(0)  # Pointer'ı başa al
-    
-    if file_size > 50 * 1024 * 1024:  # 50MB
-        st.error(f"❌ Dosya boyutu 50MB'ı aşıyor! (Mevcut: {file_size/(1024*1024):.1f} MB)")
-    else:
-        st.success(f"✅ PDF yüklendi! Boyut: {file_size/(1024*1024):.1f} MB")
-        
-        # PDF oku
-        with st.spinner("📖 PDF okunuyor..."):
-            pdf_text = read_pdf(uploaded_file)
-        
-        if pdf_text:
-            # PDF içeriğini göster
-            with st.expander("📄 PDF İçeriği (İlk 1000 karakter)"):
-                st.text(pdf_text[:1000])
-            
-            # PDF sorusu
-            st.markdown("### ❓ PDF ile ilgili sorunuz:")
-            pdf_question = st.text_input(
-                "Sorunuzu yazın:",
-                placeholder="Örn: Bu PDF'nin özeti nedir?"
-            )
-            
-            if st.button("🔍 PDF'yi Analiz Et"):
-                if pdf_question:
-                    with st.spinner("🧠 PDF analiz ediliyor..."):
-                        # Prompt
-                        prompt = f"PDF İÇERİĞİ:\n{pdf_text[:3000]}\n\nSORU: {pdf_question}"
-                        
-                        # Sistem promptu
-                        sistem = f"Sen {secili_dil_adi.split(' ', 1)[-1]} dilinde cevap veren yardımcı bir asistansın."
-                        
-                        # Cevap üret
-                        cevap = generate_response(prompt, MODELLER[mod], sistem)
-                        
-                        # Sonucu göster
-                        st.markdown("### 📋 Analiz Sonucu:")
-                        st.write(cevap)
-                else:
-                    st.warning("⚠️ Lütfen bir soru girin.")
-
-# --- 10. ALT BİLGİ ---
-st.markdown("---")
-st.markdown("""
-<div style="text-align: center; padding: 20px; color: #666;">
-    <p>🧠 BABIL LLM | Apache 2.0 | 29 Dil Desteği | HuggingFace + Render</p>
-    <p style="font-size: 0.8em;">© 2025 BABIL LLM. Tüm hakları saklıdır.</p>
-</div>
-""", unsafe_allow_html=True)
+    # Keep-Alive döngüsü
+    print("\n🛡️ Sistem canlı tutuluyor...")
+    print("❌ Bu hücreyi kapatma, bağlantı kopar!")
+    while True:
+        time.sleep(60)
+        print("✅ Sistem çalışıyor... " + time.strftime("%H:%M:%S"))
+else:
+    print("❌ Link bulunamadı!")
+    print("📋 Cloudflare Logları:")
+    print(cf_output[-1000:])
