@@ -20,8 +20,7 @@ DILLER = {
 }
 
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
-HF_USER = "wellid"
-MODEL_ID = f"{HF_USER}/babilllm-all-in-one"
+MODEL_ID = "Qwen/Qwen2.5-Coder-7B-Instruct"
 
 # Z.AI / ChatGPT Tarzı CSS (Karanlık Tema)
 st.markdown("""
